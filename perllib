@@ -1,0 +1,35 @@
+#!/bin/sh
+
+if [ -z "$1" ]; then
+	echo "Usage: $(basename $0) WEBROOT_PATH [-x EXCLUDE_DIR ...]"
+	exit
+fi
+
+DIR=$(cd $1; pwd)
+
+exclude_path_list='/imports/ /mobile'
+if [ "$2" == "-x" ]; then
+    shift 2
+    exclude_path_list=$@
+fi
+
+# find and prepare the modules path for PERL5LIB
+libs=$(find -L $DIR -type f -not -path "*/.git/*" -a -not -path "*/.svn/*" -name '*.pm' -exec dirname {} \; | sort | uniq)
+#lib=$(echo $lib | sed 's/ /:/g');
+
+lib=''
+for dir in $libs; do
+    for path in $exclude_path_list; do
+        found=$(echo $dir | grep "$path")
+        if [ ! -z "$found" ]; then
+            dir=''
+            break
+        fi
+    done
+
+    if [ ! -z "$dir" ]; then
+        lib="$lib $dir"
+    fi
+done
+
+echo $lib | sed 's/ /:/g'

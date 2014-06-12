@@ -1,0 +1,181 @@
+#!/usr/bin/env python
+
+import sys
+import os.path
+import logging
+import boto.ses
+import json
+import re
+from optparse import OptionParser
+from ConfigParser import ConfigParser
+
+logging.basicConfig(level=logging.INFO)
+
+# pre-defined regular expression
+email_pattern = re.compile(r'^\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*')
+
+def connect_ses():
+    ses = boto.ses.connect_to_region(SES_REGION,
+                aws_access_key_id=SES_ACCESS_KEY_ID, 
+                aws_secret_access_key=SES_SECRET_ASCCESS_KEY);
+    if not ses:
+        logging.error("connect to SES error: %s" % ses)
+    return ses
+
+
+"""
+AWS SES config file format
+
+[ses]
+region=<YOUR AWS SES REGION>
+aws_access_key_id=<YOUR AWS SES ACCESS KEY ID>
+aws_secret_access_key=<YOUR AWS SES SECRET KEY>
+
+"""
+def process_options():
+    parser = OptionParser(usage="usage: %prog -c config-file")
+    parser.add_option("-c", "--config-file", dest="config_file",
+                      help="configuration FILE", metavar="FILE")
+    parser.add_option("-t", "--to", dest="to_email", help="To email list")
+    parser.add_option("-f", "--from", dest="from_email", help="From email list")
+    parser.add_option("-s", "--subject", dest="subject", help="Email message subject")
+    parser.add_option("-m", "--message", dest="message", help="Email message body")
+    parser.add_option("-a", "--attach", dest="attachment", help="Email attachment")
+    parser.add_option("-r", "--raw", action="store_true",
+            dest="raw_format", help="Sends an email message in raw format")
+
+    (options, args) = parser.parse_args()
+    
+    if not (options.to_email and options.from_email):
+        parser.print_help()
+        sys.exit()
+
+    config_file = options.config_file if options.config_file else os.path.expanduser('~/.aws_config')
+
+    if not options.message:
+        if not sys.stdin.isatty():                                                
+            lines = sys.stdin.readlines()                                           
+            options.message = "".join(lines) 
+            logging.debug("got message from pipeline")
+
+    logging.debug('reading configution file %s' % options.config_file)
+    config = DefaultConfigParser()
+    config.read(config_file)
+    
+    global SES_REGION, SES_ACCESS_KEY_ID, SES_SECRET_ASCCESS_KEY
+
+    SES_REGION = config.get('ses', 'region', '')
+    SES_ACCESS_KEY_ID = config.get('ses', 'aws_access_key_id', '')
+    SES_SECRET_ASCCESS_KEY = config.get('ses', 'aws_secret_access_key', '')
+
+    logging.debug("""
+        config file: %s
+        configuration: 
+            region: %s 
+            key_id: %s 
+            secret: %s
+        email:
+            to: %s
+            from: %s
+    """ % (config_file, SES_REGION, SES_ACCESS_KEY_ID, SES_SECRET_ASCCESS_KEY,
+        options.to_email, options.from_email))
+
+    return options
+
+
+def main():
+    options = process_options()
+
+    ses = connect_ses()
+    logging.info("\n"+'-'*60+"\n")
+
+    to_addresses = options.to_email.split(' ')
+
+    # remove invalid email address
+    for addr in to_addresses:
+        if not email_pattern.match(addr):
+            to_addresses.remove(addr)
+
+    if len(to_addresses) == 0:
+        logging.error("no valid destination address (%s)" % (options.to_email))
+        return
+
+    from_address = options.from_email
+
+    reply_addresses = [] 
+    for addr in reply_addresses:
+        if not email_pattern.match(addr):
+            reply_addresses.remove(addr)
+
+    try:
+        logging.info("sending email for to %s (from %s)" % (
+                str(to_addresses), str(from_address)))
+        if options.attachment:
+            from email.mime.text import MIMEText
+            from email.mime.application import MIMEApplication
+            from email.mime.multipart import MIMEMultipart
+            msg = MIMEMultipart()
+            msg['Subject'] = options.subject
+            msg['From'] = from_address
+            msg['To'] = ','.join(to_addresses)
+
+            msg.preamble = 'Multipart message.\n'
+            part = MIMEText(options.message)
+            msg.attach(part)
+
+            part = MIMEApplication(open(options.attachment, 'rb').read())
+            filename = os.path.basename(options.attachment)
+            (root, ext) = os.path.splitext(options.attachment)
+            if ext == '.ics':
+                part.set_type("text/calendar; method=REQUEST; name=\"%s\"" % filename)
+            part.add_header('Content-Disposition', 'attachment', filename=filename)
+            msg.attach(part)
+
+            logging.debug("@"*60)
+            logging.debug(msg.as_string())
+            logging.debug("@"*60)
+            result = ses.send_raw_email(msg.as_string(),
+                    source=from_address, 
+                    destinations=to_addresses)
+
+        elif options.raw_format:
+            logging.debug('send email in raw format')
+            result = ses.send_raw_email(options.message)
+        else:
+            result = ses.send_email(
+                    from_address,
+                    options.subject,
+                    '',
+                    to_addresses,
+                    reply_addresses = reply_addresses,
+                    html_body=options.message
+                )
+
+        messageId = None
+        try:
+            messageId = result['SendEmailResponse']['SendEmailResult']['MessageId']
+            logging.info("\t messageId: %s" % messageId)
+        except:
+            logging.info("\t error: %s" % result)
+
+    except:
+        e = sys.exc_info()
+        error = e[1].message
+        logging.error("sent message error: %s" % error)
+
+    logging.info('done')
+
+
+class DefaultConfigParser(ConfigParser):
+
+    def get(self, section, option, default):
+        if self.has_section(section) and self.has_option(section, option):
+            return ConfigParser.get(self, section, option)
+        else:
+            return default
+
+
+if __name__ == "__main__":
+    main()
+
+# vim: set noai ts=4 sts=4 et sw=4 ft=python

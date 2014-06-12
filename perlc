@@ -1,0 +1,88 @@
+#!/bin/bash
+
+#TEMP=`getopt -o x:l: --long user,url -n 'mlog' -- "$@"`
+#if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+#eval set -- "$TEMP"
+#
+#while true ; do
+#    case "$1" in
+#        -|--exclude) user=$2; shift 2;;
+#         -l|--url) url=$2; shift 2;;
+#               --) shift ; break ;;
+#                *) echo "Internal error! $1" ; exit 1 ;;
+#    esac
+#done
+#if [ -z "$1" ]; then
+#	echo "Usage: $(basename $0) WEBROOT_PATH [-x EXCLUDE_DIR ...]"
+#	exit
+#fi
+
+DIR=$(cd $1; pwd)
+
+PERL=/usr/bin/perl
+#PERL=$(which perl)
+
+ERROR_LOG=/tmp/perl_compile_error
+cat /dev/null > $ERROR_LOG
+
+exclude_path_list=''
+if [ "$2" == "-x" ]; then
+    shift 2
+    exclude_path_list=$@
+fi
+
+PERL5LIB=$(perllib $DIR -x $exclude_path_list)
+
+echo Compiling modules in $1 by $PERL
+$PERL -V
+echo
+
+for file in $(find -L $DIR -type f -not -path "*/.git/*" -a -not -path "*/.svn/*" -name '*.pm' -print); do
+    for path in $exclude_path_list; do
+        found=$(echo $file | grep "$path")
+        if [ ! -z "$found" ]; then
+            file=''
+            break
+        fi
+    done
+    if [ ! -z "$file" ]; then
+        #echo ";; $file"
+        PERL5LIB=$PERL5LIB $PERL -cw $file 2>&1 | tee -a $ERROR_LOG
+    fi
+done
+echo
+
+# filter out the error module list
+error_modules=$(grep -oP 'BEGIN failed--compilation aborted at \K\S+' $ERROR_LOG | sort | uniq)
+
+if [ ! -z "error_modules" ]; then
+	echo --------------------------------------------
+	echo "The following modules has compile error"
+	for m in "$error_modules"; do
+		echo $m
+		grep "$m" $ERROR_LOG
+		echo
+	done
+
+	# filter out the possible missed modules
+	#missed_modules=$(grep -oP 'you may need to install the \K\S+ module' $ERROR_LOG | cut -d' ' -f1 | sort | uniq)
+	missed_modules=$(grep -oP "Can't locate \K\S+" $ERROR_LOG | cut -d' ' -f1 | sort | uniq)
+
+	if [ ! -z "$missed_modules" ]; then
+		echo --------------------------------------------
+		echo "you may need to install the following modules"
+		echo $(echo $missed_modules | sed 's#/#::#g' | sed 's/\.pm//g')
+		echo
+		echo "by following commands"
+		echo
+
+		for m in "$missed_modules"; do
+			echo sudo perl -MCPAN -e \"install $(echo $m | sed 's#/#::#g' | sed 's/\.pm//g')\"
+		done
+	fi
+
+else
+	echo "All look good"
+	echo
+fi
+

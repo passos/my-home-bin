@@ -1,0 +1,5 @@
+#!/bin/bash
+echo $@
+echo $1
+logfile=${1:-/var/log/httpd/sl_error_log}
+tail -fn 120 $logfile | logfilter

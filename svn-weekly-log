@@ -1,0 +1,14 @@
+#!/bin/sh
+export PATH=/home/sliu/bin:$PATH
+user_list="s.liu c.gao"
+
+for user in $user_list; do
+    svnuser=$(echo $user | sed 's/\.//g')
+
+    mlog -u $svnuser 2>&1 > /tmp/swm.$svnuser.log
+    cat /tmp/swm.$svnuser.log | txt2html | send_ses_email -c /home/sliu/.aws_config -f s.liu@foxsportspulse.com -t $user@foxsportspulse.com -s "SVN SWM Weekly Report for $svnuser"
+
+    mlog -u $svnuser 2>&1 > /tmp/sww.$svnuser.log
+    cat /tmp/sww.$svnuser.log | txt2html | send_ses_email -c /home/sliu/.aws_config -f s.liu@foxsportspulse.com -t $user@foxsportspulse.com -s "SVN SWW Weekly Report for $svnuser"
+
+done

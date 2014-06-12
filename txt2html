@@ -1,0 +1,11 @@
+#!/bin/bash
+
+echo "<html>"
+echo "<body>"
+echo "<pre>"
+
+while read line; do echo "$line"; done
+
+echo "</pre>"
+echo "</body>"
+echo "</html>"

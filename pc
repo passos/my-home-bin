@@ -1,0 +1,2 @@
+#!/bin/bash
+PER5LIB=$(perllib $1 -x import mobile) perl -cw $2
