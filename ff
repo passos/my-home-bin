@@ -1,8 +1,0 @@
-#!/bin/sh
-
-name=''
-for n in ('*.sample', '*.svn-base'); do
-    name="$name -or -name $n"
-done
-
-find -type f $(echo $name | sed 's/"//g')
