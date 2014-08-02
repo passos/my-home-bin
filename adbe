@@ -1,0 +1,3 @@
+device=$(adb devices | grep 192 | awk '{print $1'})
+echo device: $device, params: $@
+adb -s $device $@

@@ -1,0 +1,2 @@
+device=$(adb devices | grep -v 'List\|:' | awk '{print $1}')
+adb -s $device $@
