@@ -10,18 +10,23 @@ import lxml.etree
 
 ANDROID_XML_NAMESPACE='{http://schemas.android.com/apk/res/android}'
 
+def to_json(dicts, properties=None):
+    return json.dumps(dicts, ensure_ascii=False)
+
+def from_json(json_str, properties=None):
+    return json.loads(json_str)
+
+def pretty_json(dicts, properties=None):
+    return json.dumps(dicts, ensure_ascii=False, sort_keys=True, indent=4)
+
+
+
 # class for scan/parse/compress Android resource files
 class AndroidResources:
 
     def __init__(self, root):
         self.root = root
-        self.maps = od() 
-        self.maps.dimens = od()
-        self.maps.colors = od()
-        self.maps.strings = od()
-        self.maps.vars= od()
-        self.maps.vals= od()
-        self.maps.files = od()
+        self.maps = {'dimens': {}, 'colors': {}, 'strings': {}, 'attrs': {}, 'vals': {}, 'files': {}}
 
     def get_res_map(self):
         return self.maps
@@ -31,7 +36,7 @@ class AndroidResources:
         self.__find(self.__parse_xml)
 
         # sort the result
-        for dicts in [self.maps.strings, self.maps.colors, self.maps.dimens]:
+        for dicts in [self.maps['strings'], self.maps['colors'], self.maps['dimens']]:
             for k, v in dicts.items():
                 dicts[k].sort()
 
@@ -52,25 +57,25 @@ class AndroidResources:
         dom = lxml.etree.fromstring(xml)
 
         filename = fullname.split('/res/')[-1]
-        self.maps.files[filename] = self.__process(filename, dom)
+        self.maps['files'][filename] = self.__process(filename, dom)
 
     def __process(self, filename, elem):
         # handle the element like <string name="xxx'>value</string>
         # this is where the real value be placed
         if elem.tag == 'string':
-            self.__save_element_content(filename, elem, self.maps.strings)
+            self.__save_element_content(filename, elem, self.maps['strings'])
             return
         elif elem.tag == 'color':
-            self.__save_element_content(filename, elem, self.maps.colors)
+            self.__save_element_content(filename, elem, self.maps['colors'])
             return
         elif elem.tag == 'dimen':
-            self.__save_element_content(filename, elem, self.maps.dimens)
+            self.__save_element_content(filename, elem, self.maps['dimens'])
             return
 
         # handle the element like 
         # <View android:layout_width="xxx" android:layout_height="xxx" />
         # the value could be real value or variable
-        node = od()
+        node = {}
         for attr_name, attr_value in elem.attrib.items():
             # only handle attribute like android:xxx 
             if not attr_name.startswith(ANDROID_XML_NAMESPACE):
@@ -87,10 +92,10 @@ class AndroidResources:
         for e in elem:
             child_node = self.__process(filename, e)
             if (child_node is not None and len(child_node) > 0):
-                child_node._element = e.tag
+                child_node['_element'] = e.tag
                 if '_items' not in node:
-                    node._items = []
-                node._items.append(child_node)
+                    node['_items'] = []
+                node['_items'].append(child_node)
 
         return node
 
@@ -111,29 +116,32 @@ class AndroidResources:
         if value not in dicts:
             dicts[value] = []
 
-        item = od({'name': name, 'value': value, 'file': filename})
+        item = {'name': name, 'value': value, 'file': filename}
         dicts[value].append(item)
 
     def __save_element_attribute(self, name, value):
-        if name not in self.maps.vars:
-            self.maps.vars[name] = []
-        self.maps.vars[name].append(value)
+        if name not in self.maps['attrs']:
+            self.maps['attrs'][name] = []
+        self.maps['attrs'][name].append(value)
 
-        if value not in self.maps.vals:
-            self.maps.vals[value] = []
-        self.maps.vals[value].append(name)
+        if value not in self.maps['vals']:
+            self.maps['vals'][value] = []
+        self.maps['vals'][value].append(name)
 
 
 ############################################################
 # 
 ############################################################
 
-def validate_dimens(res):
+def validate(res):
     pass
 
+
 def dump_variable_map(res):
-    for filename, struct in res.maps.files.items():
-        __dump_variable_map(filename, struct._items)
+    for filename, struct in res.maps['files'].items():
+        if '_items' in struct:
+            __dump_variable_map(filename, struct['_items'])
+
 
 def __dump_variable_map(prefix, items):
     for item in items:
@@ -141,85 +149,12 @@ def __dump_variable_map(prefix, items):
         for k, v in item.items():
             if k.startswith("_"):
                 continue
-            print ':'.join((prefix, item._element, k)), '=', v
+            print ':'.join((prefix, item['_element'], k)), '=', v
 
         # dump child elements
         if '_items' in v:
-            __dump_variable_map(':'.join(prefix, item._element), v._items)
+            __dump_variable_map(':'.join(prefix, item['_element']), v['_items'])
     
-
-
-#############################################################
-# Dicactionary object
-#############################################################
-
-# An null object, won't fail on any data access method
-class Empty(dict):
-    def __new__(cls, *args, **kw):   
-        if not hasattr(cls, '__instance'):   
-            orig = super(Empty, cls)   
-            cls.__instance = orig.__new__(cls, *args, **kw)   
-        return cls.__instance   
-
-    def __getattr__(self, name):
-        return Empty()
-
-    def __setattr__(self, name, value):
-        pass
-
-    def __str__(self):
-        return ''
-
-
-class ObjectDict(dict):
-    '''Makes a dictionary behave like an object, with attribute-style access.'''
-    def __getattr__(self, name):
-        try:
-            return self[name]
-        except KeyError:
-            return Empty()
-            #raise AttributeError(name)
-
-    def __setattr__(self, name, value):
-        self[name] = value
-
-
-def od(data={}):
-    """
-    convert dict object in an object to ObjectDict
-    :param data: an object, could be list/dict/value
-    :return: an ObjectDict object for given dictionary
-    """
-    if data is None:
-        return None
-    elif type(data) == list:
-        return [od(item) for item in data]
-    elif type(data) == dict:
-        r = ObjectDict(data)
-        for (k, v) in r.items():
-            if type(v) == dict:
-                r[k] = od(v)
-            elif type(v) == list:
-                r[k] = od_list(v)
-        return r
-    else:
-        return data
-
-
-def od_list(data):
-    return [od(item) for item in data] if list is not None else []
-
-
-def to_json(dicts, properties=None):
-    return json.dumps(dicts, ensure_ascii=False)
-
-
-def from_json(json_str, properties=None):
-    return od(json.loads(json_str))
-
-
-def pretty_json(dicts, properties=None):
-    return json.dumps(dicts, ensure_ascii=False, sort_keys=True, indent=4)
 
 
 ############################################################
@@ -231,7 +166,7 @@ if __name__=="__main__":
     parser.add_option("-d", "--dump", dest="dump_type", metavar="string|color|dimen|map",
             help="scan and dump result")
     parser.add_option("-v", "--validate", dest="validate", action="store_true", 
-            default=False, help="validate dimen values for different devices")
+            default=False, help="validate values variables")
 
     (options, args) = parser.parse_args()
 
@@ -239,7 +174,7 @@ if __name__=="__main__":
         parser.print_help()
         sys.exit(0)
 
-    if options.dump_type and options.dump_type not in ['string', 'color', 'dimen', 'map', 'map_raw']:
+    if options.dump_type and options.dump_type not in ['string', 'color', 'dimen', 'map', 'map-raw', 'attr', 'value']:
         parser.print_help()
         sys.exit(0)
 
@@ -255,16 +190,20 @@ if __name__=="__main__":
 
     if options.dump_type:
         if options.dump_type == 'string':
-            print pretty_json(android_res.maps.strings)
+            print pretty_json(android_res.maps['strings'])
         elif (options.dump_type == 'color'):
-            print pretty_json(android_res.maps.colors)
+            print pretty_json(android_res.maps['colors'])
         elif (options.dump_type == 'dimen'):
-            print pretty_json(android_res.maps.dimens)
+            print pretty_json(android_res.maps['dimens'])
+        elif (options.dump_type == 'attr'):
+            print pretty_json(android_res.maps['attrs'])
+        elif (options.dump_type == 'value'):
+            print pretty_json(android_res.maps['vals'])
         elif (options.dump_type == 'map_raw'):
-            print pretty_json(android_res.maps.files)
+            print pretty_json(android_res.maps['files'])
         elif (options.dump_type == 'map'):
             dump_variable_map(android_res)
 
     elif options.validate:
-        validate_dimens(android_res)
+        validate(android_res)
 
