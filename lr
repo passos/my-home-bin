@@ -1,0 +1,13 @@
+#!/bin/sh
+
+if test $# -lt 2
+then
+        echo Please Specify the DEV and RATE.
+        exit
+fi
+
+DEV=$1
+RATE=$2
+/sbin/tc qdisc del dev $DEV ingress 2>/dev/null > /dev/null
+/sbin/tc qdisc add dev $DEV handle ffff: ingress
+/sbin/tc filter add dev $DEV parent ffff: protocol ip prio 50 u32 match ip src 0.0.0.0/0 police rate ${RATE}kbit burst 1000k drop flowid :1

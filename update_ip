@@ -1,0 +1,5 @@
+echo $(date) | notepad-cc.py -q -k passos_wdjip
+echo $(uname -a) | notepad-cc.py -q -a -k passos_wdjip
+echo $(ifconfig | grep 'inet addr') | notepad-cc.py -q -a -k passos_wdjip
+echo $(curl http://httpbin.org/ip) | notepad-cc.py -q -a -k passos_wdjip
+echo "done" | notepad-cc.py -q -a -k passos_wdjip
