@@ -1,0 +1,1 @@
+adbe logcat | grcat /usr/share/grc/conf.adb

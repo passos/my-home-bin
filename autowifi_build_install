@@ -1,0 +1,2 @@
+gradle asD
+adb -d install -r $WIFI

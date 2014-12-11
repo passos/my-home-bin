@@ -1,0 +1,2 @@
+ADB=/opt/android-sdk/platform-tools/adb
+$ADB -e shell input touchscreen tap 0 0 

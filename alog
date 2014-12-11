@@ -1,1 +1,1 @@
-adbe logcat | adbfilter | grcat /usr/share/grc/conf.adb
+pidcat.py -t subscribe -t AndroidRuntime -t System.out -t System.err -t com.wandoujia.p4 -t wdj -t HTTP | grcat /usr/share/grc/conf.adb
