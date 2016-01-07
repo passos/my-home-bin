@@ -17,7 +17,17 @@ alias agu='sudo apt-get update'
 
 alias lockscreen='gnome-screensaver-command  -l'
 
-alias findall="find . -type f -not -path '*/.git/*' -a -not -path '*/.svn/*' -print0 | xargs -0 grep --color=auto"
-alias findpm="find . -type f -not -path '*/.git/*' -a -not -path '*/.svn/*' -name '*.pm' -print0 | xargs -0 grep --color=auto"
-alias findpl="find . -type f -not -path '*/.git/*' -a -not -path '*/.svn/*' -a \( -name '*.pl' -or -name '*.pm' -or -name '*.cgi' -or -name '*.templ' \) -print0 | xargs -0 grep --color=auto"
+# find hidden files and directories
+alias findh='find . -name ".*" -type f -print0 | xargs -0 grep'
+
+# find visible files
+alias findv='find . \( -path "*/.*/*" -o -name build -o -name output \) -prune -o -type f'
+alias findall='findv -print0 | xargs -0 grep'
+alias findjava='findv -name "*.java" -print0 | xargs -0 grep'
+alias findxml='findv -name "*.xml" -print0 | xargs -0 grep'
+alias findc='findv -name "*.c" -o "*.h" -print0 | xargs -0 grep'
+
+alias findall="find . -type f -not -path '*/.git/*' -a -not -path '*/.svn/*' -print0 | xargs -0 grep"
+alias findpm="find . -type f -not -path '*/.git/*' -a -not -path '*/.svn/*' -name '*.pm' -print0 | xargs -0 grep"
+alias findpl="find . -type f -not -path '*/.git/*' -a -not -path '*/.svn/*' -a \( -name '*.pl' -or -name '*.pm' -or -name '*.cgi' -or -name '*.templ' \) -print0 | xargs -0 grep"
 
